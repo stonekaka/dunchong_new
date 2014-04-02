@@ -1,0 +1,312 @@
+diff -Nur b/arch/mips/ath79/dev-eth.c a/arch/mips/ath79/dev-eth.c
+--- b/arch/mips/ath79/dev-eth.c	2014-03-08 10:37:43.754786628 +0800
++++ a/arch/mips/ath79/dev-eth.c	2014-03-08 10:34:51.789532338 +0800
+@@ -269,6 +269,9 @@
+ struct ath79_eth_pll_data ath79_eth0_pll_data;
+ struct ath79_eth_pll_data ath79_eth1_pll_data;
+ 
++struct ath79_eth_cfg_data ath79_eth0_cfg_data;
++struct ath79_eth_cfg_data ath79_eth1_cfg_data;
++
+ static u32 ath79_get_eth_pll(unsigned int mac, int speed)
+ {
+ 	struct ath79_eth_pll_data *pll_data;
+@@ -302,6 +305,39 @@
+ 	return pll_val;
+ }
+ 
++static u32 ath79_get_eth_cfg(unsigned int mac, int speed)
++{
++	struct ath79_eth_cfg_data *cfg_data;
++	u32 cfg_val;
++
++	switch (mac) {
++	case 0:
++		cfg_data = &ath79_eth0_cfg_data;
++		break;
++	case 1:
++		cfg_data = &ath79_eth1_cfg_data;
++		break;
++	default:
++		BUG();
++	}
++
++	switch (speed) {
++	case SPEED_10:
++		cfg_val = cfg_data->cfg_10;
++		break;
++	case SPEED_100:
++		cfg_val = cfg_data->cfg_100;
++		break;
++	case SPEED_1000:
++		cfg_val = cfg_data->cfg_1000;
++		break;
++	default:
++		BUG();
++	}
++
++	return cfg_val;
++}
++
+ static void ath79_set_speed_ge0(int speed)
+ {
+ 	u32 val = ath79_get_eth_pll(0, speed);
+@@ -356,6 +392,13 @@
+ 	base = ioremap_nocache(AR71XX_PLL_BASE, AR71XX_PLL_SIZE);
+ 	__raw_writel(val, base + AR934X_PLL_ETH_XMII_CONTROL_REG);
+ 	iounmap(base);
++
++    val = ath79_get_eth_cfg(0, speed);
++    if (val > 0) {
++        base = ioremap_nocache(AR934X_GMAC_BASE, AR934X_GMAC_SIZE);
++        __raw_writel(val, base + AR934X_GMAC_REG_ETH_CFG);
++        iounmap(base);
++    }
+ }
+ 
+ static void qca955x_set_speed_xmii(int speed)
+@@ -426,6 +469,32 @@
+ 	ath79_ddr_wb_flush(AR933X_DDR_REG_FLUSH_GE1);
+ }
+ 
++#define RTL8211E_PHY_ID 0x001cc915
++#define AR8035_PHY_ID   0x004dd072
++static void ar934x_revise_config_ge0(unsigned int phy_id)
++{
++    switch (phy_id) {
++        case RTL8211E_PHY_ID:
++            ath79_eth0_pll_data.pll_10   = 0x00001313;
++            ath79_eth0_pll_data.pll_100  = 0x00000101;
++            ath79_eth0_pll_data.pll_1000 = 0x46000000;
++            ath79_eth0_cfg_data.cfg_10   = 0x00000001;
++            ath79_eth0_cfg_data.cfg_100  = 0x00000001;
++            ath79_eth0_cfg_data.cfg_1000 = 0x00028001;
++            break;
++        case AR8035_PHY_ID  : 
++            ath79_eth0_pll_data.pll_10   = 0x08001313;
++            ath79_eth0_pll_data.pll_100  = 0x08000101;
++            ath79_eth0_pll_data.pll_1000 = 0x0a000000;
++            ath79_eth0_cfg_data.cfg_10   = 0x00000001;
++            ath79_eth0_cfg_data.cfg_100  = 0x00000001;
++            ath79_eth0_cfg_data.cfg_1000 = 0x00028001;
++            break;
++        default:
++            break;
++    }
++}
++
+ static struct resource ath79_eth0_resources[] = {
+ 	{
+ 		.name	= "mac_base",
+@@ -938,6 +1007,7 @@
+ 			pdata->reset_bit = AR934X_RESET_GE0_MAC |
+ 					   AR934X_RESET_GE0_MDIO;
+ 			pdata->set_speed = ar934x_set_speed_ge0;
++			pdata->revise_config = ar934x_revise_config_ge0;
+ 		} else {
+ 			pdata->reset_bit = AR934X_RESET_GE1_MAC |
+ 					   AR934X_RESET_GE1_MDIO;
+diff -Nur b/arch/mips/ath79/dev-eth.h a/arch/mips/ath79/dev-eth.h
+--- b/arch/mips/ath79/dev-eth.h	2014-03-07 16:51:55.596467898 +0800
++++ a/arch/mips/ath79/dev-eth.h	2014-03-08 10:36:27.815232734 +0800
+@@ -28,8 +28,16 @@
+ 	u32	pll_1000;
+ };
+ 
++struct ath79_eth_cfg_data {
++	u32	cfg_10;
++	u32	cfg_100;
++	u32	cfg_1000;
++};
++
+ extern struct ath79_eth_pll_data ath79_eth0_pll_data;
+ extern struct ath79_eth_pll_data ath79_eth1_pll_data;
++extern struct ath79_eth_cfg_data ath79_eth0_cfg_data;
++extern struct ath79_eth_cfg_data ath79_eth1_cfg_data;
+ 
+ extern struct ag71xx_platform_data ath79_eth0_data;
+ extern struct ag71xx_platform_data ath79_eth1_data;
+diff -Nur b/arch/mips/ath79/mach-db120.c a/arch/mips/ath79/mach-db120.c
+--- b/arch/mips/ath79/mach-db120.c	2014-03-07 16:52:04.994531501 +0800
++++ a/arch/mips/ath79/mach-db120.c	2014-03-08 10:50:12.589248520 +0800
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#include <linux/mtd/mtd.h>
++#include <linux/mtd/partitions.h>
+ #include <linux/pci.h>
+ #include <linux/phy.h>
+ #include <linux/platform_device.h>
+@@ -38,13 +40,14 @@
+ #include "dev-wmac.h"
+ #include "machtypes.h"
+ 
+-#define DB120_GPIO_LED_USB		11
+-#define DB120_GPIO_LED_WLAN_5G		12
+-#define DB120_GPIO_LED_WLAN_2G		13
++/*#define DB120_GPIO_LED_USB		11*/
++#define DB120_GPIO_LED_WLAN_5G		6
++#define DB120_GPIO_LED_WLAN_2G		20
+ #define DB120_GPIO_LED_STATUS		14
+ #define DB120_GPIO_LED_WPS		15
+ 
+-#define DB120_GPIO_BTN_WPS		16
++#define DB120_GPIO_BTN_WPS		3
++#define DB120_GPIO_BTN_RESET		3
+ 
+ #define DB120_KEYS_POLL_INTERVAL	20	/* msecs */
+ #define DB120_KEYS_DEBOUNCE_INTERVAL	(3 * DB120_KEYS_POLL_INTERVAL)
+@@ -54,7 +57,52 @@
+ #define DB120_WMAC_CALDATA_OFFSET	0x1000
+ #define DB120_PCIE_CALDATA_OFFSET	0x5000
+ 
++static struct mtd_partition db120_partitions[] = {
++	{
++		.name		= "u-boot",
++		.offset		= 0,
++		.size		= 0x040000,
++		.mask_flags	= MTD_WRITEABLE,
++	}, {
++		.name		= "u-boot-env",
++		.offset		= 0x040000,
++		.size		= 0x010000,
++		.mask_flags	= MTD_WRITEABLE,
++	}, {
++		.name		= "kernel",
++		.offset		= 0x050000,
++		.size		= 0x160000,
++	}, {
++		.name		= "rootfs",
++		.offset		= 0x1b0000,
++		.size		= 0xc00000,
++	}, {
++		.name		= "reserved",
++		.offset		= 0xdb0000,
++		.size		= 0x230000,
++	}, {
++		.name		= "manu",
++		.offset		= 0xfe0000,
++		.size		= 0x010000,
++	}, {
++		.name		= "art",
++		.offset		= 0xff0000,
++		.size		= 0x010000,
++		.mask_flags	= MTD_WRITEABLE,
++	}, {
++		.name		= "firmware",
++		.offset		= 0x050000,
++		.size		= 0xd60000,
++	}
++};
++
++static struct flash_platform_data db120_flash_data = {
++	.parts		= db120_partitions,
++	.nr_parts	= ARRAY_SIZE(db120_partitions),
++};
++
+ static struct gpio_led db120_leds_gpio[] __initdata = {
++#if 0
+ 	{
+ 		.name		= "db120:green:status",
+ 		.gpio		= DB120_GPIO_LED_STATUS,
+@@ -70,19 +118,23 @@
+ 		.gpio		= DB120_GPIO_LED_WLAN_5G,
+ 		.active_low	= 1,
+ 	},
++#endif
+ 	{
+ 		.name		= "db120:green:wlan-2g",
+ 		.gpio		= DB120_GPIO_LED_WLAN_2G,
+ 		.active_low	= 1,
+ 	},
++#if 0
+ 	{
+ 		.name		= "db120:green:usb",
+ 		.gpio		= DB120_GPIO_LED_USB,
+ 		.active_low	= 1,
+ 	}
++#endif
+ };
+ 
+ static struct gpio_keys_button db120_gpio_keys[] __initdata = {
++#if 0
+ 	{
+ 		.desc		= "WPS button",
+ 		.type		= EV_KEY,
+@@ -91,6 +143,15 @@
+ 		.gpio		= DB120_GPIO_BTN_WPS,
+ 		.active_low	= 1,
+ 	},
++#endif
++	{
++		.desc		= "reset button",
++		.type		= EV_KEY,
++		.code		= KEY_RESTART,
++		.debounce_interval = DB120_KEYS_DEBOUNCE_INTERVAL,
++		.gpio		= DB120_GPIO_BTN_RESET,
++		.active_low	= 1,
++	}
+ };
+ 
+ static struct ar8327_pad_cfg db120_ar8327_pad0_cfg = {
+@@ -133,8 +194,8 @@
+ {
+ 	u8 *art = (u8 *) KSEG1ADDR(0x1fff0000);
+ 
+-	ath79_gpio_output_select(DB120_GPIO_LED_USB, AR934X_GPIO_OUT_GPIO);
+-	ath79_register_m25p80(NULL);
++	/*ath79_gpio_output_select(DB120_GPIO_LED_USB, AR934X_GPIO_OUT_GPIO);*/
++	ath79_register_m25p80(&db120_flash_data);
+ 
+ 	ath79_register_leds_gpio(-1, ARRAY_SIZE(db120_leds_gpio),
+ 				 db120_leds_gpio);
+@@ -148,7 +209,7 @@
+ 	ath79_setup_ar934x_eth_cfg(AR934X_ETH_CFG_RGMII_GMAC0 |
+ 				   AR934X_ETH_CFG_SW_ONLY_MODE);
+ 
+-	ath79_register_mdio(1, 0x0);
++	/*ath79_register_mdio(1, 0x0);*/
+ 	ath79_register_mdio(0, 0x0);
+ 
+ 	ath79_init_mac(ath79_eth0_data.mac_addr, art + DB120_MAC0_OFFSET, 0);
+@@ -163,6 +224,7 @@
+ 	ath79_eth0_pll_data.pll_1000 = 0x06000000;
+ 	ath79_register_eth(0);
+ 
++#if 0
+ 	/* GMAC1 is connected to the internal switch */
+ 	ath79_init_mac(ath79_eth1_data.mac_addr, art + DB120_MAC1_OFFSET, 0);
+ 	ath79_eth1_data.phy_if_mode = PHY_INTERFACE_MODE_GMII;
+@@ -170,6 +232,7 @@
+ 	ath79_eth1_data.duplex = DUPLEX_FULL;
+ 
+ 	ath79_register_eth(1);
++#endif
+ 
+ 	ath79_register_nfc();
+ }
+diff -Nur b/arch/mips/include/asm/mach-ath79/ag71xx_platform.h a/arch/mips/include/asm/mach-ath79/ag71xx_platform.h
+--- b/arch/mips/include/asm/mach-ath79/ag71xx_platform.h	2014-03-07 16:50:23.257843138 +0800
++++ a/arch/mips/include/asm/mach-ath79/ag71xx_platform.h	2014-03-07 16:59:17.878082756 +0800
+@@ -41,6 +41,7 @@
+ 
+ 	void		(*ddr_flush)(void);
+ 	void		(*set_speed)(int speed);
++	void		(*revise_config)(unsigned int phy_id);
+ 
+ 	u32		fifo_cfg1;
+ 	u32		fifo_cfg2;
+diff -Nur b/drivers/net/ethernet/atheros/ag71xx/ag71xx_phy.c a/drivers/net/ethernet/atheros/ag71xx/ag71xx_phy.c
+--- b/drivers/net/ethernet/atheros/ag71xx/ag71xx_phy.c	2014-03-07 16:49:11.441357448 +0800
++++ a/drivers/net/ethernet/atheros/ag71xx/ag71xx_phy.c	2014-03-07 16:57:00.510286540 +0800
+@@ -140,6 +140,9 @@
+ 		return PTR_ERR(ag->phy_dev);
+ 	}
+ 
++	if (pdata->revise_config)
++        pdata->revise_config(phydev->phy_id);
++
+ 	/* mask with MAC supported features */
+ 	if (pdata->has_gbit)
+ 		phydev->supported &= PHY_GBIT_FEATURES;

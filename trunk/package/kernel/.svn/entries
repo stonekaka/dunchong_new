@@ -1,0 +1,97 @@
+10
+
+dir
+39784
+svn://svn.openwrt.org/openwrt/trunk/package/kernel
+svn://svn.openwrt.org/openwrt
+
+
+
+2014-02-28T20:29:51.583326Z
+39769
+florian
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+3c298f89-4303-0410-b956-a3cf2f4a3e73
+
+i2c-gpio-custom
+dir
+
+wrt55agv2-spidevs
+dir
+
+rotary-gpio-custom
+dir
+
+mmc_over_gpio
+dir
+
+hostap-driver
+dir
+
+gpio-button-hotplug
+dir
+
+lantiq
+dir
+
+broadcom-diag
+dir
+
+avila-wdt
+dir
+
+w1-gpio-custom
+dir
+
+button-hotplug
+dir
+
+mac80211
+dir
+
+ep80579-drivers
+dir
+
+spi-gpio-custom
+dir
+
+linux
+dir
+
+trelay
+dir
+
+spi-ks8995
+dir
+
+acx-mac80211
+dir
+
+broadcom-wl
+dir
+
+rtc-rv5c386a
+dir
+
+brcm2708-gpu-fw
+dir
+
+ar7-atm
+dir
+
+om-watchdog
+dir
+
